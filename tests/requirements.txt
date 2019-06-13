@@ -1,0 +1,6 @@
+# requirements from setup.py
+# other requirements
+djangocms-helper
+tox
+coverage
+django-mptt>=0.9.1

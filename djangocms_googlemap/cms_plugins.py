@@ -1,60 +1,121 @@
+# -*- coding: utf-8 -*-
+from django.conf import settings
 from django.utils.translation import ugettext_lazy as _
 
 from cms.plugin_base import CMSPluginBase
 from cms.plugin_pool import plugin_pool
 
-from .forms import GoogleMapForm
-from .models import GoogleMap, GoogleMapLocation
+from . import models
 
-from cms.utils.urlutils import static_with_version
+
+GOOGLEMAP_API_KEY = getattr(
+    settings,
+    'DJANGOCMS_GOOGLEMAP_API_KEY',
+    None,
+)
 
 
 class GoogleMapPlugin(CMSPluginBase):
-    model = GoogleMap
-    name = _("Google Map")
-    render_template = "cms/plugins/googlemap.html"
+    model = models.GoogleMap
+    name = _('Google Map')
     admin_preview = False
-    form = GoogleMapForm
-    fieldsets = (
-        (None, {
-            'fields': ('zoom', ('width', 'height',)),
-        }),
-        (_('Advanced'), {
-            'fields': ('route_planer', 'route_planer_title', 'scrollwheel',
-                       'double_click_zoom', 'draggable', 'keyboard_shortcuts',
-                       'pan_control', 'zoom_control', 'street_view_control',
-                       'style', ),
-        }),
-    )
-
     allow_children = True
-    child_classes = ['GoogleMapLocationPlugin']
+    child_classes = ['GoogleMapMarkerPlugin', 'GoogleMapRoutePlugin']
+
+    fieldsets = [
+        (None, {
+            'fields': (
+                'title',
+                ('width', 'height',),
+            )
+        }),
+        (_('Advanced settings'), {
+            'classes': ('collapse',),
+            'fields': (
+                'template',
+                ('lat', 'lng',),
+                'style',
+            )
+        }),
+        (_('Control settings'), {
+            'classes': ('collapse',),
+            'fields': (
+                ('zoom', 'map_type_control',),
+                ('zoom_control', 'double_click_zoom',),
+                ('street_view_control', 'draggable',),
+                ('rotate_control', 'keyboard_shortcuts',),
+                ('scale_control', 'scrollwheel',),
+                'fullscreen_control',
+                'pan_control',
+            )
+        }),
+    ]
+
+    def get_render_template(self, context, instance, placeholder):
+        return 'djangocms_googlemap/{}/map.html'.format(instance.template)
 
     def render(self, context, instance, placeholder):
-        context.update({
-            'object': instance,
-            'placeholder': placeholder,
-        })
+        context = super(GoogleMapPlugin, self).render(context, instance, placeholder)
+        context['googlemap_template'] = instance.template
+        context['googlemap_key'] = GOOGLEMAP_API_KEY
         return context
 
-plugin_pool.register_plugin(GoogleMapPlugin)
 
-
-class GoogleMapLocationPlugin(CMSPluginBase):
-    model = GoogleMapLocation
-    name = _("Google Map Location")
-    render_template = "djangocms_googlemap/googlemap-location.html"
-
-    allow_children = False
+class GoogleMapMarkerPlugin(CMSPluginBase):
+    model = models.GoogleMapMarker
+    name = _('Marker')
+    module = _('Google Map')
+    require_parent = True
     parent_classes = ['GoogleMapPlugin']
 
-    # TODO: remove this as soon as the bug is fixed in DjangoCMS
-    # https://github.com/divio/django-cms/issues/5476
-    # This has to do with the cms.models.fields.PageField that doesn't include the bundle as it should (regression)
-    class Media:
-        js = (
-            static_with_version('cms/js/dist/bundle.admin.base.min.js'),
-        )
+    fieldsets = [
+        (None, {
+            'fields': (
+                'title',
+                'address',
+                ('lat', 'lng',),
+                'icon',
+            )
+        }),
+        (_('Info window'), {
+            'classes': ('collapse',),
+            'fields': (
+                'show_content',
+                'info_content',
+            )
+        }),
+    ]
+
+    def get_render_template(self, context, instance, placeholder):
+        return 'djangocms_googlemap/{}/marker.html'.format(context.get('googlemap_template', 'default'))
 
 
-plugin_pool.register_plugin(GoogleMapLocationPlugin)
+class GoogleMapRoutePlugin(CMSPluginBase):
+    model = models.GoogleMapRoute
+    name = _('Route')
+    module = _('Google Map')
+    require_parent = True
+    parent_classes = ['GoogleMapPlugin']
+
+    fieldsets = [
+        (None, {
+            'fields': (
+                'title',
+                ('origin', 'destination',),
+            )
+        }),
+        (_('Advanced settings'), {
+            'classes': ('collapse',),
+            'fields': (
+                'travel_mode',
+            )
+        }),
+    ]
+
+    def get_render_template(self, context, instance, placeholder):
+        return 'djangocms_googlemap/{}/route.html'.format(context.get('googlemap_template', 'default'))
+
+
+plugin_pool.register_plugin(GoogleMapPlugin)
+plugin_pool.register_plugin(GoogleMapMarkerPlugin)
+plugin_pool.register_plugin(GoogleMapRoutePlugin)
